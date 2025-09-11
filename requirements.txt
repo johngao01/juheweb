@@ -1,0 +1,6 @@
+Django==5.0.6
+djangorestframework==3.15.2
+django-cors-headers==4.3.1
+mysqlclient==2.2.4
+# 如果不方便安装 mysqlclient，可以改用:
+# PyMySQL==1.1.1
