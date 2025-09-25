@@ -196,6 +196,7 @@ export default function ItemDetail() {
                             </h1>
 
                             <div className="mt-4 grid grid-cols-1 gap-1.5">
+                                <Row label="来源：" value={item.sourced}/>
                                 <Row label="年龄：" value={item.age}/>
                                 <Row label="颜值：" value={item.beauty}/>
                                 <Row label="价格：" value={item.price}/>

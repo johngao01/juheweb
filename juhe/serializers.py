@@ -123,7 +123,7 @@ class DataViewDetailSerializer(MediaURLMixin, serializers.ModelSerializer):
             'id', 'index', 'title', 'age', 'beauty', 'price',
             'miaoshu', 'address', 'district', 'patime',
             'createtime', 'qq', 'wechat', 'phone', 'serverlist',
-            'city', 'place', 'tags', 'src'
+            'city', 'place', 'tags', 'src', 'sourced'
         ]
 
     def get_tags(self, obj):
