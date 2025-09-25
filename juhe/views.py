@@ -30,21 +30,15 @@ class DataViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
     serializer_class = DataViewSerializer
     pagination_class = DefaultPagination
 
-    CITY = {
-        "SH": "上海市",
-        "HZ": "杭州市",
-        "CD": "成都市",
-        "BJ": "北京市",
-        "SZ": "深圳市",
-        "GZ": "广州市",
-        "NJ": "南京市",
-        "ALL": "全部",
+    SOURCED = {
+        "51fengliu": "51风流",
+        "xiaohonglou": "小红楼",
     }
 
     def get_queryset(self):
         q = (self.request.query_params.get('q') or '').strip()
         city = self.request.query_params.get('city')
-
+        sourced = self.request.query_params.get('sourced')
         qs = DataView.objects.filter(vaild__gt=0).order_by('-createtime')
 
         # ✅ 只有 q 非空才添加模糊匹配，避免 icontains(None) 的不确定行为
@@ -57,7 +51,8 @@ class DataViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
         # ✅ city_key=ALL 时不加城市过滤
         if city != "全部":
             qs = qs.filter(city__icontains=city)
-
+        if sourced != 'all':
+            qs = qs.filter(sourced__icontains=self.SOURCED[sourced])
         return qs
 
 

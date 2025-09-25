@@ -95,7 +95,7 @@ class DataViewSerializer(MediaURLMixin, serializers.ModelSerializer):
     class Meta:
         model = DataView
         fields = ['id', 'tags', 'src', 'address', 'age', 'beauty', 'city', 'place',
-                  'createtime', 'title', 'price']
+                  'createtime', 'title', 'price', 'sourced']
 
     def get_tags(self, obj):
         return self._extract_tags(getattr(obj, 'serverlist', '') or '')

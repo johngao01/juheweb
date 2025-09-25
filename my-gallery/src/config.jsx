@@ -19,6 +19,12 @@ export const CITYS = [
     {key: "ALL", label: "全部"},
 ];
 
+export const SOURCED = [
+    {key: "all", label: "全部"},
+    {key: "51fengliu", label: "51风流"},
+    {key: "xiaohonglou", label: "小红楼"}
+]
+
 // ---- 瀑布流列数（“每列展示多少个”）----
 // 约束：最少 3，最多 10，每次 +1 / -1
 export const COLUMN_MIN = 3;
@@ -27,6 +33,7 @@ export const COLUMN_STEP = 1;
 export const DEFAULT_COLUMNS = 4; // 双击重置为此默认值
 export const DEFAULT_SORT = 'new'
 export const DEFAULT_CITY = 'SH'
+export const DEFAULT_SOURCED = 'all'
 export const DEFAULT_VIEW = "masonry"
 
 // ---- 请求分页尺寸 ----

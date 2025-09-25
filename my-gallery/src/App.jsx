@@ -6,7 +6,7 @@ import Masonry from "react-masonry-css";
 import {
     SORTS, CITYS,
     COLUMN_MIN, COLUMN_MAX, COLUMN_STEP, DEFAULT_COLUMNS,
-    PAGE_SIZES, DEFAULT_PAGE_SIZE, DEFAULT_CITY, DEFAULT_VIEW, DEFAULT_SORT
+    PAGE_SIZES, DEFAULT_PAGE_SIZE, DEFAULT_CITY, DEFAULT_VIEW, DEFAULT_SORT, SOURCED, DEFAULT_SOURCED
 } from "./config";
 
 // —— 本地存储 key —— //
@@ -16,11 +16,12 @@ const LS_KEYS = {
     sortKey: "ph_sortKey",
     scale: "ph_scale",       // 这里的 scale 表示“列数”
     pageSize: "ph_pageSize",
+    sourced: " ph_sourced",
 };
 
 // —— 请求封装：支持按城市拉取 —— //
-async function fetchImages(page = 1, pageSize = DEFAULT_PAGE_SIZE, q = "", city = "上海") {
-    const params = new URLSearchParams({page, pageSize, q, city});
+async function fetchImages(page = 1, pageSize = DEFAULT_PAGE_SIZE, q = "", city = "上海", sourced = 'all') {
+    const params = new URLSearchParams({page, pageSize, q, city, sourced});
     const res = await fetch(`/api/data/?${params.toString()}`);
     const json = await res.json();
     const items = (json.items || []).map((it) => {
@@ -30,6 +31,7 @@ async function fetchImages(page = 1, pageSize = DEFAULT_PAGE_SIZE, q = "", city 
             title: it.title || "",
             tags: Array.isArray(it.tags) ? it.tags : [it.serverlist, it.place].filter(Boolean),
             thumb: it.src && it.src.length ? it.src[0] : it.thumb,
+            sourced: it.sourced || '',
             src: it.src,
             place: it.place || "",
             createdAt: createdMs,
@@ -85,6 +87,13 @@ export default function GalleryApp() {
             return DEFAULT_PAGE_SIZE;
         }
     })();
+    const initialSourced = (() => {
+        try {
+            return localStorage.getItem(LS_KEYS.sourced) || "all";
+        } catch {
+            return DEFAULT_SOURCED;
+        }
+    })();
 
     // —— 查询相关状态 —— //
     const [activeTags, setActiveTags] = useState([]);
@@ -121,6 +130,9 @@ export default function GalleryApp() {
         const m = CITYS.find((c) => c.key === cityKey);
         return m ? m.label : "上海";
     }, [cityKey]);
+
+    const [sourced, setSourced] = useState(initialSourced);
+
     const inputRef = useRef(null);
     // —— 是否处于前端“筛选”状态 —— //
     const hasClientFilter = useMemo(() => activeTags.length > 0, [activeTags.length]);
@@ -167,6 +179,12 @@ export default function GalleryApp() {
         } catch {
         }
     }, [pageSize]);
+    useEffect(() => {
+        try {
+            localStorage.setItem(LS_KEYS.sourced, String(sourced));
+        } catch {
+        }
+    }, [sourced]);
 
     // —— 动态标签 —— //
     const TAGS = useMemo(() => {
@@ -186,7 +204,7 @@ export default function GalleryApp() {
         let mounted = true;
         (async () => {
             setLoading(true);
-            const {items, hasMore, count} = await fetchImages(page, pageSize, searchKeyword, cityLabel);
+            const {items, hasMore, count} = await fetchImages(page, pageSize, searchKeyword, cityLabel, sourced);
             if (!mounted) return;
             setImages(prev => (page === 1 ? items : [...prev, ...items]));
             setHasMore(hasMore);
@@ -196,7 +214,7 @@ export default function GalleryApp() {
         return () => {
             mounted = false;
         };
-    }, [page, cityLabel, pageSize, searchKeyword]);
+    }, [page, cityLabel, pageSize, searchKeyword, sourced]);
 
     // —— 无限滚动（选了标签就暂停） —— //
     useEffect(() => {
@@ -257,9 +275,16 @@ export default function GalleryApp() {
         setRandomMode(false);
         window.scrollTo({top: 0, behavior: "smooth"});
     };
-    const switchView = (v) => {
-        setView(v);
-    };
+
+    const onSourcedChange = (val) => {
+        setSourced(val);
+        setImages([]);
+        setPage(1);
+        setHasMore(true);
+        setRandomMode(false);
+        window.scrollTo({top: 0, behavior: "smooth"});
+    }
+
     const onSortChange = (val) => {
         setSortKey(val);
         setRandomMode(false);
@@ -408,6 +433,17 @@ export default function GalleryApp() {
                         ))}
                     </select>
 
+                    {/* 来源 */}
+                    <select
+                        className="rounded-2xl border border-gray-200 px-3 py-2 text-base"
+                        value={sourced}
+                        onChange={(e) => onSourcedChange(e.target.value)}
+                    >
+                        {SOURCED.map((s) => (
+                            <option key={s.key} value={s.key}>{s.label}</option>
+                        ))}
+                    </select>
+
                     {/* 排序 */}
                     <select
                         className="rounded-2xl border border-gray-200 px-3 py-2 text-base"
@@ -544,6 +580,9 @@ export default function GalleryApp() {
                                 {typeof it.price !== "undefined" && (
                                     <div className="text-base md:text-lg text-gray-500 mt-2">价格：{it.price}</div>
                                 )}
+                                {typeof it.sourced !== "undefined" && (
+                                    <div className="text-base md:text-lg text-gray-500 mt-2">来源：{it.sourced}</div>
+                                )}
                             </div>
                         </div>
                     ))}
@@ -665,13 +704,6 @@ export default function GalleryApp() {
                     </div>
                 )}
             </main>
-
-            <footer className="border-t border-gray-100">
-                <div className="mx-auto max-w-7xl px-4 py-6 text-base text-gray-500 flex items-center justify-between">
-                    <span>© {new Date().getFullYear()} PhotoHub</span>
-                    <span>原型：瀑布流 / 搜索 / 标签 / 预览 / 无限滚动</span>
-                </div>
-            </footer>
         </div>
     );
 }
