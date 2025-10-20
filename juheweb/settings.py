@@ -1,5 +1,6 @@
 from pathlib import Path
 import os
+import sys
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -9,6 +10,15 @@ ALLOWED_HOSTS = ['*']
 # 添加React构建的静态文件目录
 REACT_BUILD_DIR = os.path.join(BASE_DIR, 'react_build')
 
+if sys.platform.startswith('win'):
+    password = '123456'
+    MEDIA_ROOT = os.path.join('G:\juhe\cropped_pics')  # 实际存放路径
+elif sys.platform == 'linux':
+    password = '31305a0fbd'
+    MEDIA_ROOT = os.path.join('/root/download/juhe/cropped_pics')
+else:
+    password = '31305a0fbd'
+    MEDIA_ROOT = os.path.join('/root/download/juhe/cropped_pics')
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -60,8 +70,7 @@ DATABASES = {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': 'juhe',
         'USER': 'root',
-        # 'PASSWORD': '123456',
-        'PASSWORD': '31305a0fbd',
+        'PASSWORD': password,
         'HOST': '127.0.0.1',
         'PORT': '3306',
         'OPTIONS': {'charset': 'utf8mb4'},
@@ -92,8 +101,7 @@ REST_FRAMEWORK = {
 }
 
 MEDIA_URL = '/media/'  # URL 前缀
-# MEDIA_ROOT = os.path.join('G:\juhe\cropped_pics')  # 实际存放路径
-MEDIA_ROOT = os.path.join('/root/download/juhe/cropped_pics')
+
 # 静态文件配置
 STATICFILES_DIRS = [
     os.path.join(REACT_BUILD_DIR, 'static'),  # React的静态资源
