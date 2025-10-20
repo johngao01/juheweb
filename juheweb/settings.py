@@ -12,13 +12,13 @@ REACT_BUILD_DIR = os.path.join(BASE_DIR, 'react_build')
 
 if sys.platform.startswith('win'):
     password = '123456'
-    MEDIA_ROOT = os.path.join('G:\juhe\cropped_pics')  # 实际存放路径
+    MEDIA_ROOT = os.path.join('G:\juhe\pics')  # 实际存放路径
 elif sys.platform == 'linux':
     password = '31305a0fbd'
-    MEDIA_ROOT = os.path.join('/root/download/juhe/cropped_pics')
+    MEDIA_ROOT = os.path.join('/root/download/juhe/pics')
 else:
     password = '31305a0fbd'
-    MEDIA_ROOT = os.path.join('/root/download/juhe/cropped_pics')
+    MEDIA_ROOT = os.path.join('/root/download/juhe/pics')
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
