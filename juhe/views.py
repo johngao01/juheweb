@@ -34,6 +34,15 @@ class DataViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
         "xiaohonglou": "小红楼",
         "loufenggong": "楼凤宫",
     }
+    CITY = {
+        "310000": "上海市",
+        "330100": "杭州市",
+        "510100": "成都市",
+        "110000": "北京市",
+        "440300": "深圳市",
+        "440100": "广州市",
+        "320100": "南京市",
+    }
 
     def get_queryset(self):
         q = (self.request.query_params.get('q') or '').strip()
@@ -47,7 +56,7 @@ class DataViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
 
         # ✅ city_key=ALL 时不加城市过滤
         if city != "ALL":
-            qs = qs.filter(city_code=city)
+            qs = qs.filter(city=self.CITY[city])
         if sourced != 'all':
             qs = qs.filter(sourced=self.SOURCED[sourced])
         return qs
