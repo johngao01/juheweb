@@ -20,7 +20,7 @@ const LS_KEYS = {
 };
 
 // —— 请求封装：支持按城市拉取 —— //
-async function fetchImages(page = 1, pageSize = DEFAULT_PAGE_SIZE, q = "", city = "上海", sourced = 'all') {
+async function fetchImages(page = 1, pageSize = DEFAULT_PAGE_SIZE, q = "", city = "310000", sourced = 'all') {
     const params = new URLSearchParams({page, pageSize, q, city, sourced});
     const res = await fetch(`/api/data/?${params.toString()}`);
     const json = await res.json();
@@ -128,7 +128,7 @@ export default function GalleryApp() {
     // —— 城市名（传给后端） —— //
     const cityLabel = useMemo(() => {
         const m = CITYS.find((c) => c.key === cityKey);
-        return m ? m.label : "上海";
+        return m ? m.key : "310000";
     }, [cityKey]);
 
     const [sourced, setSourced] = useState(initialSourced);

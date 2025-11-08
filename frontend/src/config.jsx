@@ -9,13 +9,13 @@ export const SORTS = [
 
 // ---- 城市选项 ----
 export const CITYS = [
-    {key: "SH", label: "上海"},
-    {key: "HZ", label: "杭州"},
-    {key: "CD", label: "成都"},
-    {key: "BJ", label: "北京"},
-    {key: "SZ", label: "深圳"},
-    {key: "GZ", label: "广州"},
-    {key: "NJ", label: "南京"},
+    {key: "310000", label: "上海"},
+    {key: "330100", label: "杭州"},
+    {key: "510100", label: "成都"},
+    {key: "110000", label: "北京"},
+    {key: "440300", label: "深圳"},
+    {key: "440100", label: "广州"},
+    {key: "320100", label: "南京"},
     {key: "ALL", label: "全部"},
 ];
 
