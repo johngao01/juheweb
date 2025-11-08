@@ -22,7 +22,8 @@ export const CITYS = [
 export const SOURCED = [
     {key: "all", label: "全部"},
     {key: "51fengliu", label: "51风流"},
-    {key: "xiaohonglou", label: "小红楼"}
+    {key: "xiaohonglou", label: "小红楼"},
+    {key: "loufenggong", label: "楼凤宫"}
 ]
 
 // ---- 瀑布流列数（“每列展示多少个”）----
