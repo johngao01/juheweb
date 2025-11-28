@@ -3,7 +3,7 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from django.db.models import Q
 
-from .models import DataView
+from .models import Juhe
 from .serializers import DataViewSerializer, DataViewDetailSerializer
 
 
@@ -34,21 +34,13 @@ class DataViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
         "xiaohonglou": "小红楼",
         "loufenggong": "楼凤宫",
     }
-    CITY = {
-        "310000": "上海市",
-        "330100": "杭州市",
-        "510100": "成都市",
-        "110000": "北京市",
-        "440300": "深圳市",
-        "440100": "广州市",
-        "320100": "南京市",
-    }
+
 
     def get_queryset(self):
         q = (self.request.query_params.get('q') or '').strip()
         city = self.request.query_params.get('city')
         sourced = self.request.query_params.get('sourced')
-        qs = DataView.objects.filter(vaild__gt=0).order_by('-createtime')
+        qs = Juhe.objects.filter(vaild__gt=0).order_by('-createtime')
 
         # ✅ 只有 q 非空才添加模糊匹配，避免 icontains(None) 的不确定行为
         if q:
@@ -56,7 +48,7 @@ class DataViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
 
         # ✅ city_key=ALL 时不加城市过滤
         if city != "ALL":
-            qs = qs.filter(city=self.CITY[city])
+            qs = qs.filter(city__startswith=city[:2])
         if sourced != 'all':
             qs = qs.filter(sourced=self.SOURCED[sourced])
         return qs
@@ -66,7 +58,7 @@ class DataDetailViewSet(mixins.RetrieveModelMixin, viewsets.GenericViewSet):
     """
     单条详情接口：GET /api/show/<id>
     """
-    queryset = DataView.objects.filter(vaild__gt=0).order_by('-createtime')
+    queryset = Juhe.objects.filter(vaild__gt=0)
     serializer_class = DataViewDetailSerializer
     lookup_field = 'index'
     lookup_url_kwarg = 'id'

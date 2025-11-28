@@ -6,7 +6,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = 'dev-secret-key-change-me'
 DEBUG = True
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = ['198.46.143.26']
 # 添加React构建的静态文件目录
 REACT_BUILD_DIR = os.path.join(BASE_DIR, 'react_build')
 
@@ -86,7 +86,7 @@ USE_TZ = False
 
 STATIC_URL = '/static/'
 # 生产环境可启用以下两行：
-# STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 # 并运行 collectstatic
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 

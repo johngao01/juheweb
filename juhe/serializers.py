@@ -3,7 +3,7 @@ import re
 import json
 from django.conf import settings
 from rest_framework import serializers
-from .models import DataView
+from .models import Juhe
 
 
 # =========================
@@ -93,7 +93,7 @@ class DataViewSerializer(MediaURLMixin, serializers.ModelSerializer):
     src = serializers.SerializerMethodField()
 
     class Meta:
-        model = DataView
+        model = Juhe
         fields = ['id', 'tags', 'src', 'address', 'age', 'beauty', 'city', 'place',
                   'createtime', 'title', 'price', 'sourced']
 
@@ -117,7 +117,7 @@ class DataViewDetailSerializer(MediaURLMixin, serializers.ModelSerializer):
     tags = serializers.SerializerMethodField()
 
     class Meta:
-        model = DataView
+        model = Juhe
         # [FIX] 保留 index 兼容旧用法，同时提供 id、detail、tags、src
         fields = [
             'id', 'index', 'title', 'age', 'beauty', 'price',
