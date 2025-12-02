@@ -6,7 +6,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = 'dev-secret-key-change-me'
 DEBUG = True
-ALLOWED_HOSTS = ['198.46.143.26']
+ALLOWED_HOSTS = ['198.46.143.26', '127.0.0.1', 'abc.tiktoksave.top']
 # 添加React构建的静态文件目录
 REACT_BUILD_DIR = os.path.join(BASE_DIR, 'react_build')
 
