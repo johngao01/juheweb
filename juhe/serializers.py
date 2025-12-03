@@ -95,7 +95,7 @@ class DataViewSerializer(MediaURLMixin, serializers.ModelSerializer):
     class Meta:
         model = Juhe
         fields = ['id', 'tags', 'src', 'address', 'age', 'beauty', 'city', 'place',
-                  'createtime', 'title', 'price', 'sourced']
+                  'createtime', 'title', 'price', 'sourced', 'full_name']
 
     def get_tags(self, obj):
         return self._extract_tags(getattr(obj, 'serverlist', '') or '')
@@ -123,7 +123,7 @@ class DataViewDetailSerializer(MediaURLMixin, serializers.ModelSerializer):
             'id', 'index', 'title', 'age', 'beauty', 'price',
             'miaoshu', 'address', 'district', 'patime',
             'createtime', 'qq', 'wechat', 'phone', 'serverlist',
-            'city', 'place', 'tags', 'src', 'sourced'
+            'city', 'place', 'tags', 'src', 'sourced', 'full_name'
         ]
 
     def get_tags(self, obj):

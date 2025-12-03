@@ -1,39 +1,33 @@
-// ItemDetail.jsx
-import React, {useEffect, useMemo, useState} from "react";
-import {useParams, Link, useNavigate} from "react-router-dom";
+// src/ItemDetail.jsx
+import React, { useEffect, useMemo, useState } from "react";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import Masonry from "react-masonry-css";
+import ImageWithFallback from "./components/ImageWithFallback";
 
 async function fetchItem(id) {
-    const res = await fetch(`/api/show/${id}/`); // DRF 默认尾斜杠
+    const res = await fetch(`/api/show/${id}/`);
     if (!res.ok) throw new Error(`加载失败: ${res.status}`);
     return await res.json();
 }
 
 export default function ItemDetail() {
-    const {id} = useParams();
+    const { id } = useParams();
     const navigate = useNavigate();
 
     const [item, setItem] = useState(null);
     const [loading, setLoading] = useState(true);
     const [err, setErr] = useState("");
 
-    // ======= 从列表页缓存读取 ids 顺序（用于 上一条/下一条）=======
     const IDS_KEY = "gallery:ids";
-    const FILTER_KEY = "gallery:filters";
     const [ids, setIds] = useState([]);
-    const [filters, setFilters] = useState({});
 
     useEffect(() => {
         try {
             const cacheIds = JSON.parse(sessionStorage.getItem(IDS_KEY) || "[]");
             if (Array.isArray(cacheIds)) setIds(cacheIds);
-            const cacheFilters = JSON.parse(sessionStorage.getItem(FILTER_KEY) || "{}");
-            if (cacheFilters && typeof cacheFilters === "object") setFilters(cacheFilters);
-        } catch {
-        }
+        } catch { }
     }, []);
 
-    // 拉取当前 item
     useEffect(() => {
         let alive = true;
         (async () => {
@@ -49,26 +43,22 @@ export default function ItemDetail() {
                 if (alive) setLoading(false);
             }
         })();
-        return () => {
-            alive = false;
-        };
+        return () => { alive = false; };
     }, [id]);
 
-    // 本条图片数组（src 为数组；兼容 thumb）
     const images = useMemo(() => {
         if (!item) return [];
         if (Array.isArray(item.src) && item.src.length > 0) return item.src;
         if (item.thumb) return [item.thumb];
         return [];
     }, [item]);
-    const masonryCols = {default: 4};
-    // 上/下一条 id
+
+    const masonryCols = { default: 4, 768: 2, 500: 1 };
     const idx = useMemo(() => ids.findIndex(x => String(x) === String(id)), [ids, id]);
     const prevId = idx > 0 ? ids[idx - 1] : null;
     const nextId = (idx >= 0 && idx < ids.length - 1) ? ids[idx + 1] : null;
     const goto = (targetId) => targetId && navigate(`/show/${targetId}`);
 
-    // 键盘左右切换
     useEffect(() => {
         const onKey = (e) => {
             if (e.key === "ArrowLeft" && prevId) goto(prevId);
@@ -78,35 +68,28 @@ export default function ItemDetail() {
         return () => window.removeEventListener("keydown", onKey);
     }, [prevId, nextId]);
 
-    // 复制提示
-    const [toast, setToast] = useState({open: false, text: ""});
+    const [toast, setToast] = useState({ open: false, text: "" });
     const showToast = (text) => {
-        setToast({open: true, text});
+        setToast({ open: true, text });
         window.clearTimeout(showToast._t);
-        showToast._t = window.setTimeout(() => setToast({open: false, text: ""}), 1200);
+        showToast._t = window.setTimeout(() => setToast({ open: false, text: "" }), 1200);
     };
     const copy = async (text, label = "") => {
         const v = (text ?? "").toString().trim();
         if (!v) return;
         try {
             await navigator.clipboard.writeText(v);
-            showToast(`${label ? `${label}已复制：` : ""}${v}`);
-        } catch {
-            showToast("复制失败");
-        }
+            showToast(`${label ? `${label}已复制` : "已复制"}`);
+        } catch { showToast("复制失败"); }
     };
 
     const showVal = (v) => (v === null || v === undefined || v === "") ? "—" : v;
     const fmtTime = (v) => v ? new Date(v).toLocaleString() : "—";
 
-    // ====== 详情页 Lightbox（默认实际大小 / 可切换适应屏幕）======
     const [lbOpen, setLbOpen] = useState(false);
     const [lbIdx, setLbIdx] = useState(0);
     const [fitToScreen, setFitToScreen] = useState(false);
-    const openLightbox = (idx0 = 0) => {
-        setLbIdx(idx0);
-        setLbOpen(true);
-    };
+    const openLightbox = (idx0 = 0) => { setLbIdx(idx0); setLbOpen(true); };
     const closeLightbox = () => setLbOpen(false);
     const showPrevImg = () => setLbIdx((i) => (i - 1 + images.length) % images.length);
     const showNextImg = () => setLbIdx((i) => (i + 1) % images.length);
@@ -122,102 +105,88 @@ export default function ItemDetail() {
         return () => window.removeEventListener("keydown", onKey);
     }, [lbOpen, images.length]);
 
-    if (loading) {
-        return (
-            <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
-                <main className="mx-auto max-w-7xl px-4 py-8">
-                    <div className="text-gray-500 text-lg">详情加载中…</div>
-                </main>
-            </div>
-        );
-    }
+    if (loading) return <div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-500">加载中...</div>;
+    if (err || !item) return <div className="min-h-screen bg-slate-50 p-8 text-center text-red-500">加载失败：{err || "未找到该条目"}</div>;
 
-    if (err || !item) {
-        return (
-            <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
-                <main className="mx-auto max-w-7xl px-4 py-8">
-                    <div className="text-red-600 mb-4 text-lg">加载失败：{err || "未找到该条目"}</div>
-                    <button onClick={() => navigate(-1)}
-                            className="rounded-xl border px-4 py-2 hover:bg-gray-50 text-base">← 返回
-                    </button>
-                </main>
-            </div>
-        );
-    }
-
-    // 可点击复制的行
-    const Row = ({label, value}) => (
-        <button
-            type="button"
-            onClick={() => copy(value, label)}
-            className="group w-full text-left rounded-lg px-2 py-2 hover:bg-gray-50 focus:bg-gray-50 transition"
-            title="点击复制"
-        >
-            <span className="text-gray-500 mr-2 text-base">{label}</span>
-            <span className="align-middle text-lg break-words">{showVal(value)}</span>
+    const Row = ({ label, value }) => (
+        <button type="button" onClick={() => copy(value, label)} className="group w-full text-left rounded-lg px-3 py-2.5 hover:bg-slate-50 transition border border-transparent hover:border-slate-100 flex items-start justify-between">
+            <span className="text-slate-500 text-sm whitespace-nowrap">{label}</span>
+            <span className="text-slate-800 text-sm font-medium text-right break-all ml-4 select-text">{showVal(value)}</span>
         </button>
     );
 
     return (
-        <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
-            <header className="border-b border-gray-100 bg-white">
-                <div className="mx-auto max-w-7xl px-4 py-4 flex items-center justify-between">
+        <div className="min-h-screen bg-slate-50 text-slate-800 font-sans pb-10">
+            {/* [改进] 顶部工具栏：磨砂质感，两端对齐 */}
+            <header className="sticky top-0 z-30 border-b border-slate-200/60 bg-white/80 backdrop-blur-md transition-all">
+                <div className="mx-auto max-w-7xl px-4 h-16 flex items-center justify-between">
+                    {/* 左侧：返回 */}
+                    <button
+                        onClick={() => navigate(-1)}
+                        className="flex items-center gap-2 text-slate-600 hover:text-slate-900 px-3 py-2 rounded-full hover:bg-slate-100/80 transition active:scale-95"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6" /></svg>
+                        <span className="text-base font-semibold">返回</span>
+                    </button>
+
+                    {/* 右侧：导航 */}
                     <div className="flex items-center gap-3">
-                        <button onClick={() => navigate(-1)}
-                                className="rounded-xl border px-3 py-1 hover:bg-gray-50 text-base" title="返回">← 返回
-                        </button>
-                        <Link to="/" className="text-gray-600 hover:text-gray-900 text-base">首页</Link>
-                    </div>
-                    <div className="flex items-center gap-2">
                         <button
-                            className="rounded-xl border px-3 py-1 text-base disabled:opacity-40"
-                            onClick={() => goto(prevId)} disabled={!prevId} title="上一条（←）">← 上一条
+                            className="w-10 h-10 flex items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 disabled:opacity-30 disabled:hover:bg-transparent transition active:scale-95"
+                            onClick={() => goto(prevId)}
+                            disabled={!prevId}
+                            title="上一条 (←)"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6" /></svg>
                         </button>
                         <button
-                            className="rounded-xl border px-3 py-1 text-base disabled:opacity-40"
-                            onClick={() => goto(nextId)} disabled={!nextId} title="下一条（→）">下一条 →
+                            className="w-10 h-10 flex items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 disabled:opacity-30 disabled:hover:bg-transparent transition active:scale-95"
+                            onClick={() => goto(nextId)}
+                            disabled={!nextId}
+                            title="下一条 (→)"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>
                         </button>
-                        <div className="text-gray-400 text-sm">ID: {item?.id}</div>
                     </div>
                 </div>
             </header>
 
-            <main className="mx-auto max-w-full px-4 py-6 text-base">
-                <div className="grid grid-cols-1 md:grid-cols-10 gap-6 items-start">
-                    {/* 左侧：3 */}
-                    <aside className="md:col-span-2">
-                        <div className="rounded-2xl border border-gray-100 bg-white p-5 sticky top-4">
-                            <h1
-                                className="text-3xl md:text-4xl font-bold leading-snug break-words cursor-pointer"
-                                title="点击复制标题"
-                                onClick={() => copy(item.title || "", "标题")}
-                            >
-                                {showVal(item.title)}
-                            </h1>
+            <main className="mx-auto max-w-full px-4 py-6 relative">
+                {/* [改进] ID 显示：作为巨大的背景水印或右上角大标签 */}
+                <div className="absolute bottom-4 right-4 -mt-2 opacity-10 pointer-events-none select-none">
+                    <span className="text-[5rem] md:text-[8rem] font-black tracking-tighter text-slate-900 leading-none">
+                        #{item?.id}
+                    </span>
+                </div>
 
-                            <div className="mt-4 grid grid-cols-1 gap-1.5">
-                                <Row label="来源：" value={item.sourced}/>
-                                <Row label="年龄：" value={item.age}/>
-                                <Row label="颜值：" value={item.beauty}/>
-                                <Row label="价格：" value={item.price}/>
-                                <Row label="地址：" value={item.address}/>
-                                <Row label="地点：" value={item.place}/>
-                                <Row label="采集时间：" value={fmtTime(item.patime)}/>
-                                <Row label="创建时间：" value={fmtTime(item.createtime)}/>
-                                <Row label="QQ：" value={item.qq}/>
-                                <Row label="微信：" value={item.wechat}/>
-                                <Row label="电话：" value={item.phone}/>
-                                <Row label="服务列表：" value={item.serverlist}/>
+                <div className="grid grid-cols-1 md:grid-cols-10 gap-8 items-start mt-4">
+                    {/* 信息栏 */}
+                    <aside className="md:col-span-3 order-last md:order-first relative z-10">
+                        <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-6 md:sticky md:top-24 overflow-hidden">
+                            <div className="flex items-start justify-between gap-4 mb-6">
+                                <h1 className="text-xl md:text-2xl font-bold leading-tight cursor-pointer hover:text-blue-600 transition" onClick={() => copy(item.title || "", "标题")}>
+                                    {showVal(item.title)}
+                                </h1>
+                                {/* 移动端 ID 显示补充 */}
+                                <div className="md:hidden text-xs font-mono text-slate-300 bg-slate-50 px-2 py-1 rounded">#{item.id}</div>
+                            </div>
+
+                            <div className="space-y-1 divide-y divide-slate-50">
+                                <Row label="城市" value={item.full_name} />
+                                <Row label="地点" value={item.address} />
+                                <Row label="价格" value={item.price} />
+                                <Row label="来源" value={item.sourced} />
+                                <Row label="采集时间" value={fmtTime(item.patime)} />
+                                <Row label="服务" value={item.serverlist} />
+                                <Row label="QQ" value={item.qq} />
+                                <Row label="微信" value={item.wechat} />
+                                <Row label="电话" value={item.phone} />
                             </div>
 
                             {(item.miaoshu || item.detail) && (
-                                <div className="mt-6">
-                                    <div className="text-gray-900 font-semibold mb-2 text-lg">详细描述</div>
-                                    <div
-                                        className="prose max-w-none whitespace-pre-wrap text-gray-700 text-lg leading-relaxed rounded-lg px-2 py-2 hover:bg-gray-50 cursor-pointer"
-                                        onClick={() => copy(item.miaoshu || item.detail || "", "详细描述")}
-                                        title="点击复制"
-                                    >
+                                <div className="mt-8 pt-6 border-t border-slate-100">
+                                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">详细描述</h3>
+                                    <div className="prose prose-sm text-slate-600 bg-slate-50 rounded-xl p-4 cursor-pointer hover:bg-blue-50/50 transition whitespace-pre-wrap" onClick={() => copy(item.miaoshu || item.detail, "描述")}>
                                         {item.miaoshu || item.detail}
                                     </div>
                                 </div>
@@ -225,97 +194,48 @@ export default function ItemDetail() {
                         </div>
                     </aside>
 
-                    {/* 右侧：7 - 严格 1:1 原始像素展示 */}
-                    <section className="md:col-span-8">
-                        {images.length === 0 ? (
-                            <div className="text-gray-500 text-lg">该条目暂无图片</div>
-                        ) : (
-                            <Masonry
-                                breakpointCols={masonryCols}
-                                className="flex gap-4"
-                                columnClassName="flex flex-col gap-4"
-                            >
-                                {images.map((url, i) => (
-                                    <figure key={`${item.id}-${i}`}
-                                            className="rounded-2xl">
-                                        <img
-                                            src={url}
-                                            alt={`${item.title || "图片"}-${i + 1}`}
-                                            loading="lazy"
-                                            className="w-full h-auto rounded-2xl hover:opacity-95"
-                                            onClick={() => openLightbox(i)}
-                                        />
-                                        <figcaption className="px-3 py-2 text-gray-500 text-sm">第 {i + 1} 张
-                                        </figcaption>
-                                    </figure>
-                                ))}
-                            </Masonry>
-                        )}
+                    {/* 图片区域 */}
+                    <section className="md:col-span-7 relative z-10">
+                        <Masonry breakpointCols={masonryCols} className="flex gap-4" columnClassName="flex flex-col gap-4">
+                            {images.map((url, i) => (
+                                <div key={i} className="group relative rounded-xl overflow-hidden cursor-zoom-in shadow-sm hover:shadow-md transition" onClick={() => openLightbox(i)}>
+                                    <ImageWithFallback src={url} className="w-full h-auto bg-slate-200 transition duration-500 group-hover:scale-[1.02]" />
+                                    <div className="absolute top-2 right-2 bg-black/40 text-white text-[10px] font-medium px-2 py-0.5 rounded-full backdrop-blur-md opacity-0 group-hover:opacity-100 transition">
+                                        {i + 1}
+                                    </div>
+                                </div>
+                            ))}
+                        </Masonry>
                     </section>
                 </div>
             </main>
 
-            {/* 复制提示 Toast */}
-            <div
-                className={`fixed bottom-6 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg bg-black/80 text-white text-sm transition
-        ${toast.open ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"}`}
-            >
+            <div className={`fixed top-20 left-1/2 -translate-x-1/2 px-4 py-2 rounded-full bg-slate-900/90 text-white text-sm shadow-xl transition-all z-50 ${toast.open ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"}`}>
                 {toast.text}
             </div>
 
-            {/* Lightbox 大图预览 */}
             {lbOpen && images.length > 0 && (
-                <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col" onClick={closeLightbox}>
-                    <div className="flex items-center justify-between p-3 text-white">
-                        <div className="text-base opacity-80 truncate">{item?.title}</div>
-                        <div className="flex items-center gap-2">
-                            <button
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    setFitToScreen(v => !v);
-                                }}
-                                className="rounded-lg bg-white/10 px-3 py-1 text-base hover:bg-white/20"
-                                title={fitToScreen ? "切换到实际大小" : "切换到适应屏幕"}
-                            >
-                                {fitToScreen ? "适应屏幕" : "实际大小"}
-                            </button>
-                            <button
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    closeLightbox();
-                                }}
-                                className="rounded-lg bg-white/10 px-3 py-1 text-base hover:bg-white/20"
-                            >
-                                关闭 (Esc)
+                <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur flex flex-col" onClick={closeLightbox}>
+                    <div className="absolute inset-y-0 left-0 w-[20%] z-10 cursor-pointer" onClick={(e) => { e.stopPropagation(); showPrevImg(); }} />
+                    <div className="absolute inset-y-0 right-0 w-[20%] z-10 cursor-pointer" onClick={(e) => { e.stopPropagation(); showNextImg(); }} />
+
+                    <div className="flex items-center justify-between p-4 z-20 pointer-events-none">
+                        <div className="flex gap-2 pointer-events-auto">
+                            <button onClick={(e) => { e.stopPropagation(); setFitToScreen(v => !v); }} className="rounded-full bg-white/10 px-4 py-1.5 text-xs font-medium text-white hover:bg-white/20 transition">
+                                {fitToScreen ? "适应屏幕" : "查看原图"}
                             </button>
                         </div>
+                        <button onClick={(e) => { e.stopPropagation(); closeLightbox(); }} className="pointer-events-auto rounded-full bg-white/10 w-8 h-8 flex items-center justify-center text-white hover:bg-white/20 transition">✕</button>
                     </div>
 
-                    <div className="flex-1 flex items-center justify-center px-4 relative"
-                         onClick={(e) => e.stopPropagation()}>
-                        <button
-                            aria-label="上一张" onClick={showPrevImg}
-                            className="hidden md:block absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-white/10 hover:bg-white/20 text-white px-3 py-2"
-                        >←
-                        </button>
-
-                        <div className="w-full h-full flex items-center justify-center overflow-auto">
-                            <img
-                                src={images[lbIdx]}
-                                alt={item?.title}
-                                className={`rounded-xl shadow-2xl ${fitToScreen ? "max-h-[80vh] max-w-[90vw] object-contain" : ""}`}
-                                style={fitToScreen ? {} : {maxWidth: "none", maxHeight: "none"}}
-                            />
-                        </div>
-
-                        <button
-                            aria-label="下一张" onClick={showNextImg}
-                            className="hidden md:block absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-white/10 hover:bg-white/20 text-white px-3 py-2"
-                        >→
-                        </button>
+                    <div className="flex-1 flex items-center justify-center overflow-auto z-0 p-2">
+                        <img
+                            src={images[lbIdx]}
+                            className={`rounded shadow-2xl transition-all duration-300 ${fitToScreen ? "max-h-full max-w-full object-contain" : ""}`}
+                            style={fitToScreen ? {} : { maxWidth: "none", maxHeight: "none" }}
+                        />
                     </div>
-
-                    <div className="p-3 text-center text-white/80 text-sm">
+                    <div className="p-4 text-center text-white/50 text-xs z-20">
                         {lbIdx + 1} / {images.length}
                     </div>
                 </div>
