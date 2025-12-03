@@ -1,4 +1,3 @@
-// src/App.jsx
 import React, { useEffect, useMemo, useRef, useState, useCallback, useLayoutEffect } from "react";
 import Masonry from "react-masonry-css";
 import ImageWithFallback from "./components/ImageWithFallback";
@@ -10,8 +9,60 @@ import {
 } from "./config";
 
 const SESSION_KEY = "gallery_session_state";
+const AUTH_KEY = "gallery_is_verified";
 
-// API 请求函数
+// =================================================================
+// 1. 登录组件
+// =================================================================
+const LoginScreen = ({ onPass }) => {
+    const [input, setInput] = useState("");
+    const [error, setError] = useState("");
+
+    const handleSubmit = (e) => {
+        e.preventDefault();
+
+        const now = new Date();
+        const yy = String(now.getFullYear()).slice(-2);
+        const mm = String(now.getMonth() + 1).padStart(2, '0');
+        const dd = String(now.getDate()).padStart(2, '0');
+        const hh = String(now.getHours()).padStart(2, '0');
+        const min = String(now.getMinutes()).padStart(2, '0');
+
+        const correctPwd = `${dd}${hh}${min}`;
+
+        if (input === correctPwd) {
+            onPass();
+        } else {
+            setError(`验证失败!!!`);
+            setInput("");
+        }
+    };
+
+    return (
+        <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
+            <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm text-center border border-slate-100">
+                <div className="mb-6">
+                    <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">🔒</div>
+                    <h2 className="text-2xl font-bold text-slate-800">访问验证</h2>
+                </div>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <input
+                        type="tel"
+                        value={input}
+                        onChange={(e) => setInput(e.target.value)}
+                        placeholder="请输入密码"
+                        className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition text-center text-lg tracking-widest font-mono text-slate-700"
+                        autoFocus
+                    />
+                    {error && <div className="text-red-500 text-sm font-medium animate-pulse">{error}</div>}
+                    <button type="submit" className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-slate-800 active:scale-[0.98] transition-all">解锁进入</button>
+                </form>
+            </div>
+        </div>
+    );
+};
+
+
 async function fetchImages(page = 1, pageSize = DEFAULT_PAGE_SIZE, q = "", city = "310000", sourced = 'all') {
     const params = new URLSearchParams({ page, pageSize, q, city, sourced });
     const res = await fetch(`/api/data/?${params.toString()}&_t=${Date.now()}`);
@@ -19,9 +70,7 @@ async function fetchImages(page = 1, pageSize = DEFAULT_PAGE_SIZE, q = "", city 
     const json = await res.json();
 
     const items = (json.items || []).map((it) => {
-        // 解析时间戳用于排序
         const createdMs = it.createtime ? Date.parse(it.createtime) : 0;
-
         const rawSrc = Array.isArray(it.src) ? it.src : [];
         let thumbUrl = rawSrc.length ? rawSrc[0] : (it.thumb || "");
 
@@ -33,8 +82,8 @@ async function fetchImages(page = 1, pageSize = DEFAULT_PAGE_SIZE, q = "", city 
             sourced: it.sourced || '',
             src: rawSrc,
             place: it.place || "",
-            createdAt: createdMs, // 用于排序
-            dateStr: it.createtime || "", // [新增] 保留原始时间字符串用于展示
+            createdAt: createdMs,
+            dateStr: it.createtime || "",
             city: it.city || "",
             price: it.price,
             full_name: it.full_name,
@@ -45,7 +94,10 @@ async function fetchImages(page = 1, pageSize = DEFAULT_PAGE_SIZE, q = "", city 
     return { items, hasMore: Boolean(json.hasMore), count };
 }
 
-export default function GalleryApp() {
+// =================================================================
+// 3. 主界面组件
+// =================================================================
+function GalleryMain() {
     const restoredState = useMemo(() => {
         try {
             const nav = performance.getEntriesByType("navigation")[0];
@@ -55,6 +107,7 @@ export default function GalleryApp() {
         } catch { return null; }
     }, []);
 
+    // 初始化配置
     const initialCityKey = restoredState?.cityKey ?? (() => { try { return localStorage.getItem(LS_KEYS.cityKey) || DEFAULT_CITY; } catch { return DEFAULT_CITY; } })();
     const initialView = (() => { try { return localStorage.getItem(LS_KEYS.view) === "list" ? "list" : "masonry"; } catch { return DEFAULT_VIEW; } })();
     const initialSortKey = (() => { try { return localStorage.getItem(LS_KEYS.sortKey) || DEFAULT_SORT; } catch { return DEFAULT_SORT; } })();
@@ -63,6 +116,7 @@ export default function GalleryApp() {
     const initialSourced = restoredState?.sourced ?? (() => { try { return localStorage.getItem(LS_KEYS.sourced) || "all"; } catch { return DEFAULT_SOURCED; } })();
     const initialShowSidebar = (() => { try { const v = localStorage.getItem(LS_KEYS.showSidebar); return v === null ? true : v === "true"; } catch { return true; } })();
 
+    // State
     const [activeTags, setActiveTags] = useState(restoredState?.activeTags || []);
     const [sortKey, setSortKey] = useState(initialSortKey);
     const [view, setView] = useState(initialView);
@@ -96,6 +150,7 @@ export default function GalleryApp() {
 
     function hasClientFilter() { return activeTags.length > 0; }
 
+    // Effects & Logic
     useEffect(() => {
         const stateToSave = {
             images, page, hasMore, totalCount, cityKey, sourced, pageSize, searchKeyword, activeTags,
@@ -269,6 +324,7 @@ export default function GalleryApp() {
     return (
         <div className="min-h-screen bg-slate-50 text-slate-800 font-sans">
             <main className="mx-auto max-w-full px-4 pt-0 pb-6 text-base">
+                {/* 顶部工具栏 */}
                 <div className="sticky top-0 z-20 bg-slate-50/95 backdrop-blur py-3 shadow-sm -mx-4 px-4 mb-4 border-b border-slate-200/50">
                     <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
                         <div className="flex items-center gap-3 shrink-0">
@@ -333,13 +389,17 @@ export default function GalleryApp() {
                             <div className="py-20 text-center text-gray-500 text-base">无结果，试试更少的筛选或更短的关键词。</div>
                         ) : view === "list" ? (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {displayedImages.map((it) => (
-                                    <div key={it.id} className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 hover:shadow-md transition-all flex flex-col">
+                                {displayedImages.map((it, idx) => (
+                                    <div key={it.id} className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 hover:shadow-md transition-all flex flex-col relative">
+                                        {/* [新增] 列表视图序号 (右上角) */}
+                                        <div className="absolute top-0 right-0 bg-slate-100 text-slate-400 text-[20px] px-2 py-1 rounded-bl-xl rounded-tr-xl font-mono">
+                                            #{idx + 1}
+                                        </div>
+
                                         <div className="flex justify-between items-start mb-3">
                                             <div className="flex-1 min-w-0">
                                                 <a href={`/show/${it.id}`} className="font-bold text-lg text-slate-900 truncate block hover:text-blue-600 transition-colors" title={it.title}>{it.title}</a>
                                                 <div className="flex items-center gap-3 text-sm text-slate-500 mt-1">
-                                                    {/* [修改] 简单替换T为空格 */}
                                                     <span>{it.dateStr ? it.dateStr.replace('T', ' ') : "未知日期"}</span>
                                                     <span>{it.full_name} {it.place}</span>
                                                     {it.sourced && <span className="bg-slate-100 text-xs px-2 py-0.5 rounded">{it.sourced}</span>}
@@ -366,14 +426,19 @@ export default function GalleryApp() {
                             </div>
                         ) : (
                             <Masonry breakpointCols={masonryBreakpointCols} className="flex gap-4" columnClassName="flex flex-col gap-4">
-                                {displayedImages.map((it) => (
+                                {displayedImages.map((it, idx) => (
                                     <figure key={it.id} className="group relative rounded-2xl bg-white overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
                                         <div className="relative aspect-[3/4] overflow-hidden cursor-pointer" onClick={() => openLightbox(displayedImages.indexOf(it), 0)}>
                                             <ImageWithFallback src={it.thumb} alt={it.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                                             <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                                 <div className="bg-white/90 backdrop-blur text-xs px-3 py-1 rounded-full shadow-lg font-medium">预览</div>
                                             </div>
-                                            {it.sourced && <div className="absolute top-2 left-2 bg-black/50 backdrop-blur text-white text-[10px] px-2 py-0.5 rounded">{it.sourced}</div>}
+                                            {it.sourced && <div className="absolute top-2 left-2 bg-black/50 backdrop-blur text-white text-[20px] px-2 py-0.5 rounded">{it.sourced}</div>}
+
+                                            {/* [新增] 瀑布流视图序号 (图片右上角) */}
+                                            <div className="absolute top-2 right-2 bg-black/60 text-white text-[20px] font-bold px-2 py-0.5 rounded-full backdrop-blur-sm">
+                                                {idx + 1}
+                                            </div>
                                         </div>
                                         <div className="p-3">
                                             <div className="flex justify-between items-start gap-2">
@@ -411,7 +476,10 @@ export default function GalleryApp() {
                         <div className="absolute inset-y-0 left-0 w-[20%] z-10 cursor-pointer" onClick={(e) => { e.stopPropagation(); showPrev(); }} />
                         <div className="absolute inset-y-0 right-0 w-[20%] z-10 cursor-pointer" onClick={(e) => { e.stopPropagation(); showNext(); }} />
                         <div className="flex items-center justify-between p-4 text-white z-20 pointer-events-none">
-                            <div className="text-sm font-medium opacity-90 truncate max-w-[70%]">{displayedImages[lbItemIdx]?.title}</div>
+                            <div className="text-sm font-medium opacity-90 truncate max-w-[70%]">
+                                <span className="mr-2 opacity-60 text-xs">#{lbItemIdx + 1}</span>
+                                {displayedImages[lbItemIdx]?.title}
+                            </div>
                             <button onClick={(e) => { e.stopPropagation(); closeLightbox(); }} className="pointer-events-auto rounded-full bg-white/10 px-4 py-1.5 text-sm hover:bg-white/20 backdrop-blur">关闭</button>
                         </div>
                         <div className="flex-1 flex items-center justify-center px-4 relative z-0">
@@ -428,4 +496,22 @@ export default function GalleryApp() {
             </main>
         </div>
     );
+}
+
+// 4. 入口组件
+export default function GalleryApp() {
+    const [isVerified, setIsVerified] = useState(() => {
+        try {
+            return sessionStorage.getItem(AUTH_KEY) === "true";
+        } catch { return false; }
+    });
+
+    if (!isVerified) {
+        return <LoginScreen onPass={() => {
+            sessionStorage.setItem(AUTH_KEY, "true");
+            setIsVerified(true);
+        }} />;
+    }
+
+    return <GalleryMain />;
 }
