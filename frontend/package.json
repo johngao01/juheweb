@@ -1,6 +1,6 @@
 {
-  "name": "my-gallery",
-  "version": "0.0.1",
+  "name": "juhe web fron",
+  "version": "1.0",
   "private": true,
   "scripts": {
     "dev": "vite",
