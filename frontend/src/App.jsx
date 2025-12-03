@@ -9,60 +9,8 @@ import {
 } from "./config";
 
 const SESSION_KEY = "gallery_session_state";
-const AUTH_KEY = "gallery_is_verified";
 
-// =================================================================
-// 1. 登录组件
-// =================================================================
-const LoginScreen = ({ onPass }) => {
-    const [input, setInput] = useState("");
-    const [error, setError] = useState("");
-
-    const handleSubmit = (e) => {
-        e.preventDefault();
-
-        const now = new Date();
-        const yy = String(now.getFullYear()).slice(-2);
-        const mm = String(now.getMonth() + 1).padStart(2, '0');
-        const dd = String(now.getDate()).padStart(2, '0');
-        const hh = String(now.getHours()).padStart(2, '0');
-        const min = String(now.getMinutes()).padStart(2, '0');
-
-        const correctPwd = `${dd}${hh}${min}`;
-
-        if (input === correctPwd) {
-            onPass();
-        } else {
-            setError(`验证失败!!!`);
-            setInput("");
-        }
-    };
-
-    return (
-        <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
-            <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm text-center border border-slate-100">
-                <div className="mb-6">
-                    <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">🔒</div>
-                    <h2 className="text-2xl font-bold text-slate-800">访问验证</h2>
-                </div>
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    <input
-                        type="tel"
-                        value={input}
-                        onChange={(e) => setInput(e.target.value)}
-                        placeholder="请输入密码"
-                        className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition text-center text-lg tracking-widest font-mono text-slate-700"
-                        autoFocus
-                    />
-                    {error && <div className="text-red-500 text-sm font-medium animate-pulse">{error}</div>}
-                    <button type="submit" className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-slate-800 active:scale-[0.98] transition-all">解锁进入</button>
-                </form>
-            </div>
-        </div>
-    );
-};
-
-
+// API 请求函数 (无 fixImgUrl，直接使用后端数据)
 async function fetchImages(page = 1, pageSize = DEFAULT_PAGE_SIZE, q = "", city = "310000", sourced = 'all') {
     const params = new URLSearchParams({ page, pageSize, q, city, sourced });
     const res = await fetch(`/api/data/?${params.toString()}&_t=${Date.now()}`);
@@ -97,7 +45,7 @@ async function fetchImages(page = 1, pageSize = DEFAULT_PAGE_SIZE, q = "", city 
 // =================================================================
 // 3. 主界面组件
 // =================================================================
-function GalleryMain() {
+export default function GalleryApp() {
     const restoredState = useMemo(() => {
         try {
             const nav = performance.getEntriesByType("navigation")[0];
@@ -496,22 +444,4 @@ function GalleryMain() {
             </main>
         </div>
     );
-}
-
-// 4. 入口组件
-export default function GalleryApp() {
-    const [isVerified, setIsVerified] = useState(() => {
-        try {
-            return sessionStorage.getItem(AUTH_KEY) === "true";
-        } catch { return false; }
-    });
-
-    if (!isVerified) {
-        return <LoginScreen onPass={() => {
-            sessionStorage.setItem(AUTH_KEY, "true");
-            setIsVerified(true);
-        }} />;
-    }
-
-    return <GalleryMain />;
 }
