@@ -11,6 +11,7 @@ import {
 
 const SESSION_KEY = "gallery_session_state";
 
+// API 请求函数
 async function fetchImages(page = 1, pageSize = DEFAULT_PAGE_SIZE, q = "", city = "310000", sourced = 'all') {
     const params = new URLSearchParams({ page, pageSize, q, city, sourced });
     const res = await fetch(`/api/data/?${params.toString()}&_t=${Date.now()}`);
@@ -19,7 +20,7 @@ async function fetchImages(page = 1, pageSize = DEFAULT_PAGE_SIZE, q = "", city 
 
     const items = (json.items || []).map((it) => {
         const createdMs = it.createtime ? Date.parse(it.createtime) : 0;
-        // 直接使用后端返回
+
         const rawSrc = Array.isArray(it.src) ? it.src : [];
         let thumbUrl = rawSrc.length ? rawSrc[0] : (it.thumb || "");
 
@@ -42,9 +43,17 @@ async function fetchImages(page = 1, pageSize = DEFAULT_PAGE_SIZE, q = "", city 
 }
 
 export default function GalleryApp() {
-    // 1. 尝试从 SessionStorage 恢复状态
+    // 1. [核心修改] 智能恢复状态
+    // 仅当用户是通过 "后退/前进" (back_forward) 进入页面时，才读取缓存
+    // 如果是刷新 (reload) 或新打开 (navigate)，则忽略缓存，强制重新加载
     const restoredState = useMemo(() => {
         try {
+            const nav = performance.getEntriesByType("navigation")[0];
+            // 如果不是后退/前进操作，直接返回 null（视为新页面）
+            if (nav && nav.type !== 'back_forward') {
+                return null;
+            }
+
             const data = sessionStorage.getItem(SESSION_KEY);
             return data ? JSON.parse(data) : null;
         } catch { return null; }
@@ -87,13 +96,13 @@ export default function GalleryApp() {
     const scaleBoxRef = useRef(null);
     const inputRef = useRef(null);
     const isFetching = useRef(false);
-    // 标记是否是从缓存恢复的，用于跳过第一次自动请求
+    // 标记是否是从缓存恢复的
     const isRestored = useRef(!!restoredState);
 
     const [lbItemIdx, setLbItemIdx] = useState(-1);
     const [lbImgIdx, setLbImgIdx] = useState(0);
 
-    const countText = hasClientFilter() ? `${images.length} (筛选)` : `${images.length} / ${totalCount}`;
+    const countText = hasClientFilter() ? `${filteredImages().length} / ${images.length} (筛选)` : `${images.length} / ${totalCount}`;
 
     function hasClientFilter() { return activeTags.length > 0; }
 
@@ -101,9 +110,8 @@ export default function GalleryApp() {
     useEffect(() => {
         const stateToSave = {
             images, page, hasMore, totalCount, cityKey, sourced, pageSize, searchKeyword, activeTags,
-            scrollTop: window.scrollY // 保存滚动位置
+            scrollTop: window.scrollY
         };
-        // 使用 debounce 或者是简单的每次 update 保存（数据量不大时问题不大，若卡顿可加 debounce）
         sessionStorage.setItem(SESSION_KEY, JSON.stringify(stateToSave));
     }, [images, page, hasMore, totalCount, cityKey, sourced, pageSize, searchKeyword, activeTags]);
 
@@ -111,7 +119,6 @@ export default function GalleryApp() {
     useLayoutEffect(() => {
         if (isRestored.current && restoredState?.scrollTop) {
             window.scrollTo(0, restoredState.scrollTop);
-            // 恢复后关闭标志，避免后续操作受影响
             setTimeout(() => { isRestored.current = false; }, 100);
         }
     }, []);
@@ -124,10 +131,8 @@ export default function GalleryApp() {
     useEffect(() => { try { localStorage.setItem(LS_KEYS.pageSize, String(pageSize)); } catch { } }, [pageSize]);
     useEffect(() => { try { localStorage.setItem(LS_KEYS.sourced, String(sourced)); } catch { } }, [sourced]);
     useEffect(() => { try { localStorage.setItem(LS_KEYS.showSidebar, String(showSidebar)); } catch { } }, [showSidebar]);
-    // 缓存 IDs 给详情页上一条下一条用
     useEffect(() => { try { const ids = images.map(it => it.id); sessionStorage.setItem('gallery:ids', JSON.stringify(ids)); } catch { } }, [images]);
 
-    // —— 统计标签 ——
     const TAGS = useMemo(() => {
         const freq = new Map();
         for (const it of images) {
@@ -142,8 +147,7 @@ export default function GalleryApp() {
 
     // —— API 请求核心逻辑 ——
     useEffect(() => {
-        // 关键逻辑：如果是从缓存恢复的，且数据不为空，则跳过第一次 Effect 的自动请求
-        // 否则会重新请求第一页覆盖掉缓存的 100 条数据
+        // 如果是从缓存恢复的，跳过第一次请求，避免覆盖已有的数据
         if (isRestored.current && images.length > 0) {
             return;
         }
@@ -165,6 +169,7 @@ export default function GalleryApp() {
                 if (!mounted) return;
 
                 setImages(prev => {
+                    // 如果是第一页，覆盖；否则追加并去重
                     if (page === 1) return items;
                     const exists = new Set(prev.map(p => p.id));
                     const newItems = items.filter(it => !exists.has(it.id));
@@ -187,7 +192,7 @@ export default function GalleryApp() {
         return () => { mounted = false; };
     }, [page, cityKey, pageSize, searchKeyword, sourced]);
 
-    // —— 无限滚动监听 ——
+    // —— 无限滚动 ——
     useEffect(() => {
         if (!sentinelRef.current) return;
         const io = new IntersectionObserver((entries) => {
@@ -200,8 +205,10 @@ export default function GalleryApp() {
         return () => io.disconnect();
     }, [hasMore, loading, activeTags.length]);
 
-    // —— 客户端排序与过滤 ——
-    const filteredImages = useMemo(() => {
+    // —— 客户端排序与过滤 (函数形式，防止useMemo循环) ——
+    // 使用函数而不是useMemo，因为 filteredImages 主要是为了渲染，而 images 变化太快
+    // 但为了性能，我们还是可以在 render 时计算
+    function filteredImages() {
         let arr = [...images];
 
         if (activeTags.length > 0) {
@@ -220,33 +227,23 @@ export default function GalleryApp() {
             }
         }
         return arr;
-    }, [images, activeTags, sortKey, randomMode, randomNonce]);
+    }
+    const displayedImages = filteredImages(); // 获取当前应当展示的列表
 
-    // —— 重置逻辑 (强制刷新) ——
-    const handleHardReset = () => {
-        // 清除 SessionStorage 并刷新页面，或者重置所有状态
-        sessionStorage.removeItem(SESSION_KEY);
-        // 重置状态
-        setImages([]);
-        setPage(1);
-        setSearchKeyword("");
-        setLbItemIdx(-1);
-        isRestored.current = false;
-        // 如果想更彻底，可以直接 reload
-        // window.location.reload(); 
-        // 但为了 SPA 体验，我们手动重置状态触发 useEffect
-        // 注意：useEffect 依赖了 page, cityKey 等，这里重置它们会触发请求
-    };
-
+    // —— 事件处理 ——
     const resetAndFetch = () => {
-        // 常规筛选变化时的重置
         setImages([]);
         setPage(1);
         setHasMore(true);
         setRandomMode(false);
         setLbItemIdx(-1);
         isFetching.current = false;
-        isRestored.current = false; // 确保不再跳过请求
+        isRestored.current = false; // 确保是全新请求
+    };
+
+    const handleHardReset = () => {
+        sessionStorage.removeItem(SESSION_KEY);
+        resetAndFetch();
     };
 
     const onCityChange = (val) => { setCityKey(val); resetAndFetch(); window.scrollTo({ top: 0, behavior: "smooth" }); };
@@ -287,21 +284,21 @@ export default function GalleryApp() {
         return arr.slice(s);
     }, []);
     const showPrev = () => {
-        if (lbItemIdx < 0 || filteredImages.length === 0) return;
+        if (lbItemIdx < 0 || displayedImages.length === 0) return;
         if (lbImgIdx > 0) setLbImgIdx(lbImgIdx - 1);
         else {
-            const prevItemIdx = (lbItemIdx - 1 + filteredImages.length) % filteredImages.length;
-            const prevImgs = getImagesOf(filteredImages[prevItemIdx]);
+            const prevItemIdx = (lbItemIdx - 1 + displayedImages.length) % displayedImages.length;
+            const prevImgs = getImagesOf(displayedImages[prevItemIdx]);
             setLbItemIdx(prevItemIdx);
             setLbImgIdx(Math.max(0, prevImgs.length - 1));
         }
     };
     const showNext = () => {
-        if (lbItemIdx < 0 || filteredImages.length === 0) return;
-        const imgs = getImagesOf(filteredImages[lbItemIdx]);
+        if (lbItemIdx < 0 || displayedImages.length === 0) return;
+        const imgs = getImagesOf(displayedImages[lbItemIdx]);
         if (lbImgIdx < imgs.length - 1) setLbImgIdx(lbImgIdx + 1);
         else {
-            setLbItemIdx((lbItemIdx + 1) % filteredImages.length);
+            setLbItemIdx((lbItemIdx + 1) % displayedImages.length);
             setLbImgIdx(0);
         }
     };
@@ -314,10 +311,10 @@ export default function GalleryApp() {
         };
         window.addEventListener("keydown", onKey);
         return () => window.removeEventListener("keydown", onKey);
-    }, [lbItemIdx, lbImgIdx, filteredImages, getImagesOf]);
+    }, [lbItemIdx, lbImgIdx, displayedImages, getImagesOf]);
     useEffect(() => {
-        if (lbItemIdx >= 0 && lbItemIdx >= filteredImages.length) { setLbItemIdx(-1); setLbImgIdx(0); }
-    }, [filteredImages.length, lbItemIdx]);
+        if (lbItemIdx >= 0 && lbItemIdx >= displayedImages.length) { setLbItemIdx(-1); setLbImgIdx(0); }
+    }, [displayedImages.length, lbItemIdx]);
 
     const masonryBreakpointCols = useMemo(() => {
         return { default: scale, 1024: Math.min(scale, 3), 768: 2 };
@@ -329,7 +326,7 @@ export default function GalleryApp() {
                 <div className="sticky top-0 z-20 bg-slate-50/95 backdrop-blur py-3 shadow-sm -mx-4 px-4 mb-4 border-b border-slate-200/50">
                     <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
                         <div className="flex items-center gap-3 shrink-0">
-                            {/* [修改] 点击聚合/Logo 时彻底重置状态 */}
+                            {/* 强制刷新 */}
                             <a href="/" onClick={(e) => { e.preventDefault(); handleHardReset(); }} className="text-xl font-bold tracking-tight text-slate-900 hover:text-blue-600 transition cursor-pointer">
                                 聚合
                             </a>
@@ -387,11 +384,11 @@ export default function GalleryApp() {
                     )}
 
                     <section className={showSidebar ? "md:col-span-8" : "md:col-span-10"}>
-                        {filteredImages.length === 0 && !loading ? (
+                        {displayedImages.length === 0 && !loading ? (
                             <div className="py-20 text-center text-gray-500 text-base">无结果，试试更少的筛选或更短的关键词。</div>
                         ) : view === "list" ? (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {filteredImages.map((it) => (
+                                {displayedImages.map((it) => (
                                     <div key={it.id} className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 hover:shadow-md transition-all flex flex-col">
                                         <div className="flex justify-between items-start mb-3">
                                             <div className="flex-1 min-w-0">
@@ -406,7 +403,7 @@ export default function GalleryApp() {
                                         {(it.src || []).length > 0 && (
                                             <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide mb-3">
                                                 {(it.src || []).map((url, i) => (
-                                                    <div key={i} className="flex-shrink-0 w-32 h-32 md:w-40 md:h-40 rounded-lg overflow-hidden cursor-pointer bg-slate-100" onClick={() => openLightbox(filteredImages.indexOf(it), i)}>
+                                                    <div key={i} className="flex-shrink-0 w-32 h-32 md:w-40 md:h-40 rounded-lg overflow-hidden cursor-pointer bg-slate-100" onClick={() => openLightbox(displayedImages.indexOf(it), i)}>
                                                         <ImageWithFallback src={url} alt={`${it.title}-${i}`} className="w-full h-full object-cover hover:opacity-90" />
                                                     </div>
                                                 ))}
@@ -423,9 +420,9 @@ export default function GalleryApp() {
                             </div>
                         ) : (
                             <Masonry breakpointCols={masonryBreakpointCols} className="flex gap-4" columnClassName="flex flex-col gap-4">
-                                {filteredImages.map((it) => (
+                                {displayedImages.map((it) => (
                                     <figure key={it.id} className="group relative rounded-2xl bg-white overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
-                                        <div className="relative aspect-[3/4] overflow-hidden cursor-pointer" onClick={() => openLightbox(filteredImages.indexOf(it), 0)}>
+                                        <div className="relative aspect-[3/4] overflow-hidden cursor-pointer" onClick={() => openLightbox(displayedImages.indexOf(it), 0)}>
                                             <ImageWithFallback src={it.thumb} alt={it.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                                             <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                                 <div className="bg-white/90 backdrop-blur text-xs px-3 py-1 rounded-full shadow-lg font-medium">预览</div>
@@ -436,11 +433,10 @@ export default function GalleryApp() {
                                             <div className="flex justify-between items-start gap-2">
                                                 <a href={`/show/${it.id}`} className="block font-bold text-gray-800 text-sm truncate hover:text-blue-600 mb-1 flex-1" title={it.title}>{it.title}</a>
                                             </div>
-                                            {/* [修改] 瀑布流移除了地址和价格 */}
                                             {getImagesOf(it, 1).length > 0 && (
                                                 <div className="mt-2 grid grid-cols-4 gap-1">
                                                     {getImagesOf(it, 1).slice(0, 3).map((url, i) => (
-                                                        <div key={i} className="aspect-square rounded overflow-hidden cursor-zoom-in" onClick={() => openLightbox(filteredImages.indexOf(it), i + 1)}>
+                                                        <div key={i} className="aspect-square rounded overflow-hidden cursor-zoom-in" onClick={() => openLightbox(displayedImages.indexOf(it), i + 1)}>
                                                             <ImageWithFallback src={url} className="w-full h-full object-cover hover:opacity-80" />
                                                         </div>
                                                     ))}
@@ -469,18 +465,18 @@ export default function GalleryApp() {
                         <div className="absolute inset-y-0 left-0 w-[20%] z-10 cursor-pointer" onClick={(e) => { e.stopPropagation(); showPrev(); }} />
                         <div className="absolute inset-y-0 right-0 w-[20%] z-10 cursor-pointer" onClick={(e) => { e.stopPropagation(); showNext(); }} />
                         <div className="flex items-center justify-between p-4 text-white z-20 pointer-events-none">
-                            <div className="text-sm font-medium opacity-90 truncate max-w-[70%]">{filteredImages[lbItemIdx]?.title}</div>
+                            <div className="text-sm font-medium opacity-90 truncate max-w-[70%]">{displayedImages[lbItemIdx]?.title}</div>
                             <button onClick={(e) => { e.stopPropagation(); closeLightbox(); }} className="pointer-events-auto rounded-full bg-white/10 px-4 py-1.5 text-sm hover:bg-white/20 backdrop-blur">关闭</button>
                         </div>
                         <div className="flex-1 flex items-center justify-center px-4 relative z-0">
                             {(() => {
-                                const item = filteredImages[lbItemIdx];
+                                const item = displayedImages[lbItemIdx];
                                 const imgs = getImagesOf(item);
                                 const url = imgs[lbImgIdx];
                                 return <img src={url} alt="preview" className="max-h-[85vh] max-w-[95vw] object-contain rounded-lg shadow-2xl transition-transform duration-300" />;
                             })()}
                         </div>
-                        <div className="p-4 text-center text-white/50 text-xs z-20">{lbImgIdx + 1} / {getImagesOf(filteredImages[lbItemIdx]).length}</div>
+                        <div className="p-4 text-center text-white/50 text-xs z-20">{lbImgIdx + 1} / {getImagesOf(displayedImages[lbItemIdx]).length}</div>
                     </div>
                 )}
             </main>
