@@ -19,6 +19,7 @@ async function fetchImages(page = 1, pageSize = DEFAULT_PAGE_SIZE, q = "", city 
     const json = await res.json();
 
     const items = (json.items || []).map((it) => {
+        // 解析时间戳用于排序
         const createdMs = it.createtime ? Date.parse(it.createtime) : 0;
 
         const rawSrc = Array.isArray(it.src) ? it.src : [];
@@ -32,9 +33,11 @@ async function fetchImages(page = 1, pageSize = DEFAULT_PAGE_SIZE, q = "", city 
             sourced: it.sourced || '',
             src: rawSrc,
             place: it.place || "",
-            createdAt: createdMs,
+            createdAt: createdMs, // 用于排序
+            dateStr: it.createtime || "", // [新增] 保留原始时间字符串用于展示
             city: it.city || "",
             price: it.price,
+            full_name: it.full_name,
         };
     });
 
@@ -43,23 +46,15 @@ async function fetchImages(page = 1, pageSize = DEFAULT_PAGE_SIZE, q = "", city 
 }
 
 export default function GalleryApp() {
-    // 1. [核心修改] 智能恢复状态
-    // 仅当用户是通过 "后退/前进" (back_forward) 进入页面时，才读取缓存
-    // 如果是刷新 (reload) 或新打开 (navigate)，则忽略缓存，强制重新加载
     const restoredState = useMemo(() => {
         try {
             const nav = performance.getEntriesByType("navigation")[0];
-            // 如果不是后退/前进操作，直接返回 null（视为新页面）
-            if (nav && nav.type !== 'back_forward') {
-                return null;
-            }
-
+            if (nav && nav.type !== 'back_forward') return null;
             const data = sessionStorage.getItem(SESSION_KEY);
             return data ? JSON.parse(data) : null;
         } catch { return null; }
     }, []);
 
-    // —— 初始化配置 (优先使用恢复的值，否则读 LocalStorage 配置) ——
     const initialCityKey = restoredState?.cityKey ?? (() => { try { return localStorage.getItem(LS_KEYS.cityKey) || DEFAULT_CITY; } catch { return DEFAULT_CITY; } })();
     const initialView = (() => { try { return localStorage.getItem(LS_KEYS.view) === "list" ? "list" : "masonry"; } catch { return DEFAULT_VIEW; } })();
     const initialSortKey = (() => { try { return localStorage.getItem(LS_KEYS.sortKey) || DEFAULT_SORT; } catch { return DEFAULT_SORT; } })();
@@ -68,7 +63,6 @@ export default function GalleryApp() {
     const initialSourced = restoredState?.sourced ?? (() => { try { return localStorage.getItem(LS_KEYS.sourced) || "all"; } catch { return DEFAULT_SOURCED; } })();
     const initialShowSidebar = (() => { try { const v = localStorage.getItem(LS_KEYS.showSidebar); return v === null ? true : v === "true"; } catch { return true; } })();
 
-    // —— UI 状态 ——
     const [activeTags, setActiveTags] = useState(restoredState?.activeTags || []);
     const [sortKey, setSortKey] = useState(initialSortKey);
     const [view, setView] = useState(initialView);
@@ -78,25 +72,21 @@ export default function GalleryApp() {
     const [randomNonce, setRandomNonce] = useState(0);
     const [showSidebar, setShowSidebar] = useState(initialShowSidebar);
 
-    // —— API 状态 ——
     const [cityKey, setCityKey] = useState(initialCityKey);
     const [sourced, setSourced] = useState(initialSourced);
     const [pageSize, setPageSize] = useState(initialPageSize);
     const [searchKeyword, setSearchKeyword] = useState(restoredState?.searchKeyword || "");
     const [page, setPage] = useState(restoredState?.page || 1);
 
-    // —— 数据状态 ——
     const [images, setImages] = useState(restoredState?.images || []);
     const [hasMore, setHasMore] = useState(restoredState?.hasMore ?? true);
     const [loading, setLoading] = useState(false);
     const [totalCount, setTotalCount] = useState(restoredState?.totalCount || 0);
 
-    // —— 交互 Refs ——
     const sentinelRef = useRef(null);
     const scaleBoxRef = useRef(null);
     const inputRef = useRef(null);
     const isFetching = useRef(false);
-    // 标记是否是从缓存恢复的
     const isRestored = useRef(!!restoredState);
 
     const [lbItemIdx, setLbItemIdx] = useState(-1);
@@ -106,7 +96,6 @@ export default function GalleryApp() {
 
     function hasClientFilter() { return activeTags.length > 0; }
 
-    // —— 状态保存逻辑 (SessionStorage) ——
     useEffect(() => {
         const stateToSave = {
             images, page, hasMore, totalCount, cityKey, sourced, pageSize, searchKeyword, activeTags,
@@ -115,7 +104,6 @@ export default function GalleryApp() {
         sessionStorage.setItem(SESSION_KEY, JSON.stringify(stateToSave));
     }, [images, page, hasMore, totalCount, cityKey, sourced, pageSize, searchKeyword, activeTags]);
 
-    // —— 滚动位置恢复 ——
     useLayoutEffect(() => {
         if (isRestored.current && restoredState?.scrollTop) {
             window.scrollTo(0, restoredState.scrollTop);
@@ -123,7 +111,6 @@ export default function GalleryApp() {
         }
     }, []);
 
-    // —— 普通配置持久化 (LocalStorage) ——
     useEffect(() => { try { localStorage.setItem(LS_KEYS.cityKey, cityKey); } catch { } }, [cityKey]);
     useEffect(() => { try { localStorage.setItem(LS_KEYS.view, view); } catch { } }, [view]);
     useEffect(() => { try { localStorage.setItem(LS_KEYS.sortKey, sortKey); } catch { } }, [sortKey]);
@@ -145,37 +132,25 @@ export default function GalleryApp() {
         return Array.from(freq.entries()).sort((a, b) => b[1] - a[1]).map(([tag]) => tag);
     }, [images]);
 
-    // —— API 请求核心逻辑 ——
     useEffect(() => {
-        // 如果是从缓存恢复的，跳过第一次请求，避免覆盖已有的数据
-        if (isRestored.current && images.length > 0) {
-            return;
-        }
-
+        if (isRestored.current && images.length > 0) return;
         if (page > 1 && isFetching.current) return;
 
         let mounted = true;
-
         const loadData = async () => {
             isFetching.current = true;
             setLoading(true);
-
             try {
                 const m = CITYS.find((c) => c.key === cityKey);
                 const apiCity = m ? m.key : "310000";
-
                 const { items, hasMore: apiHasMore, count } = await fetchImages(page, pageSize, searchKeyword, apiCity, sourced);
-
                 if (!mounted) return;
-
                 setImages(prev => {
-                    // 如果是第一页，覆盖；否则追加并去重
                     if (page === 1) return items;
                     const exists = new Set(prev.map(p => p.id));
                     const newItems = items.filter(it => !exists.has(it.id));
                     return [...prev, ...newItems];
                 });
-
                 setHasMore(apiHasMore);
                 if (typeof count === "number" && count >= 0) setTotalCount(count);
             } catch (e) {
@@ -187,12 +162,10 @@ export default function GalleryApp() {
                 }
             }
         };
-
         loadData();
         return () => { mounted = false; };
     }, [page, cityKey, pageSize, searchKeyword, sourced]);
 
-    // —— 无限滚动 ——
     useEffect(() => {
         if (!sentinelRef.current) return;
         const io = new IntersectionObserver((entries) => {
@@ -205,16 +178,11 @@ export default function GalleryApp() {
         return () => io.disconnect();
     }, [hasMore, loading, activeTags.length]);
 
-    // —— 客户端排序与过滤 (函数形式，防止useMemo循环) ——
-    // 使用函数而不是useMemo，因为 filteredImages 主要是为了渲染，而 images 变化太快
-    // 但为了性能，我们还是可以在 render 时计算
     function filteredImages() {
         let arr = [...images];
-
         if (activeTags.length > 0) {
             arr = arr.filter((it) => activeTags.every((t) => (it.tags || []).includes(t)));
         }
-
         if (randomMode) {
             if (randomNonce > 0) arr.sort(() => 0.5 - Math.random());
         } else {
@@ -228,38 +196,17 @@ export default function GalleryApp() {
         }
         return arr;
     }
-    const displayedImages = filteredImages(); // 获取当前应当展示的列表
+    const displayedImages = filteredImages();
 
-    // —— 事件处理 ——
     const resetAndFetch = () => {
-        setImages([]);
-        setPage(1);
-        setHasMore(true);
-        setRandomMode(false);
-        setLbItemIdx(-1);
-        isFetching.current = false;
-        isRestored.current = false; // 确保是全新请求
+        setImages([]); setPage(1); setHasMore(true); setRandomMode(false); setLbItemIdx(-1);
+        isFetching.current = false; isRestored.current = false;
     };
-
-    const handleHardReset = () => {
-        sessionStorage.removeItem(SESSION_KEY);
-        resetAndFetch();
-    };
-
+    const handleHardReset = () => { sessionStorage.removeItem(SESSION_KEY); resetAndFetch(); };
     const onCityChange = (val) => { setCityKey(val); resetAndFetch(); window.scrollTo({ top: 0, behavior: "smooth" }); };
     const onSourcedChange = (val) => { setSourced(val); resetAndFetch(); window.scrollTo({ top: 0, behavior: "smooth" }); }
-    const onPageSizeChange = (val) => {
-        const n = parseInt(val, 10);
-        setPageSize(PAGE_SIZES.includes(n) ? n : DEFAULT_PAGE_SIZE);
-        resetAndFetch();
-        window.scrollTo({ top: 0, behavior: "smooth" });
-    };
-    const handleSearch = () => {
-        const keyword = inputRef.current?.value.trim() || "";
-        setSearchKeyword(keyword);
-        resetAndFetch();
-    };
-
+    const onPageSizeChange = (val) => { const n = parseInt(val, 10); setPageSize(PAGE_SIZES.includes(n) ? n : DEFAULT_PAGE_SIZE); resetAndFetch(); window.scrollTo({ top: 0, behavior: "smooth" }); };
+    const handleSearch = () => { const keyword = inputRef.current?.value.trim() || ""; setSearchKeyword(keyword); resetAndFetch(); };
     const onSortChange = (val) => { setSortKey(val); setRandomMode(false); };
     const toggleTag = (tag) => { setActiveTags((prev) => (prev.includes(tag) ? prev.filter((x) => x !== tag) : [...prev, tag])); };
 
@@ -274,7 +221,6 @@ export default function GalleryApp() {
         return () => window.removeEventListener("wheel", onWheelGlobal, true);
     }, [scaleHover]);
 
-    // —— Lightbox ——
     const openLightbox = (itemIdx, imageIdx = 0) => { setLbItemIdx(itemIdx); setLbImgIdx(imageIdx); };
     const closeLightbox = () => setLbItemIdx(-1);
     const getImagesOf = useCallback((item, start = 0) => {
@@ -326,7 +272,6 @@ export default function GalleryApp() {
                 <div className="sticky top-0 z-20 bg-slate-50/95 backdrop-blur py-3 shadow-sm -mx-4 px-4 mb-4 border-b border-slate-200/50">
                     <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
                         <div className="flex items-center gap-3 shrink-0">
-                            {/* 强制刷新 */}
                             <a href="/" onClick={(e) => { e.preventDefault(); handleHardReset(); }} className="text-xl font-bold tracking-tight text-slate-900 hover:text-blue-600 transition cursor-pointer">
                                 聚合
                             </a>
@@ -394,8 +339,9 @@ export default function GalleryApp() {
                                             <div className="flex-1 min-w-0">
                                                 <a href={`/show/${it.id}`} className="font-bold text-lg text-slate-900 truncate block hover:text-blue-600 transition-colors" title={it.title}>{it.title}</a>
                                                 <div className="flex items-center gap-3 text-sm text-slate-500 mt-1">
-                                                    <span>{it.createdAt ? new Date(it.createdAt).toLocaleDateString() : "未知日期"}</span>
-                                                    <span>{it.city} {it.place}</span>
+                                                    {/* [修改] 简单替换T为空格 */}
+                                                    <span>{it.dateStr ? it.dateStr.replace('T', ' ') : "未知日期"}</span>
+                                                    <span>{it.full_name} {it.place}</span>
                                                     {it.sourced && <span className="bg-slate-100 text-xs px-2 py-0.5 rounded">{it.sourced}</span>}
                                                 </div>
                                             </div>
