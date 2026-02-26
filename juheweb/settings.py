@@ -15,10 +15,10 @@ if sys.platform.startswith('win'):
     MEDIA_ROOT = os.path.join('G:\juhe\pics')  # 实际存放路径
 elif sys.platform == 'linux':
     password = '31305a0fbd'
-    MEDIA_ROOT = os.path.join('/root/download/juhe/pics')
+    MEDIA_ROOT = os.path.join('/root/juhe/pics')
 else:
     password = '31305a0fbd'
-    MEDIA_ROOT = os.path.join('/root/download/juhe/pics')
+    MEDIA_ROOT = os.path.join('/root/juhe/pics')
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
