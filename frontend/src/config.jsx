@@ -16,6 +16,7 @@ export const CITYS = [
     { key: "440300", label: "深圳" },
     { key: "440100", label: "广州" },
     { key: "320100", label: "南京" },
+    { key: "360100", label: "南昌" },
     { key: "ALL", label: "全部" },
 ];
 
@@ -23,7 +24,8 @@ export const SOURCED = [
     { key: "all", label: "全部" },
     { key: "51fengliu", label: "51风流" },
     { key: "xiaohonglou", label: "小红楼" },
-    { key: "loufenggong", label: "楼凤宫" }
+    { key: "loufenggong", label: "楼凤宫" },
+    { key: "xunhuange", label: "寻欢阁" }
 ];
 
 // ---- 本地存储 KEYS (统一管理) ----

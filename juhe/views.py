@@ -33,6 +33,7 @@ class DataViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
         "51fengliu": "51风流",
         "xiaohonglou": "小红楼",
         "loufenggong": "楼凤宫",
+        "xunhuange": "寻欢阁"
     }
 
 
